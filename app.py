@@ -28,11 +28,66 @@ stop_words = set(stopwords.words("english"))
 # =========================================================
 
 def clean_text(text):
-    """Clean extra spaces and new lines."""
+    """Clean extra spaces and line breaks."""
 
     text = re.sub(r"\s+", " ", text)
 
     return text.strip()
+
+
+# =========================================================
+# NORMALIZE CONCEPTS
+# =========================================================
+
+def normalize_concept(concept):
+    """
+    Normalize concept names so that:
+    AI and Artificial Intelligence are treated as the same concept.
+    """
+
+    concept = concept.strip().lower()
+
+    concept = re.sub(r"[^\w\s-]", "", concept)
+
+    aliases = {
+        "ai": "artificial intelligence",
+        "artificial intelligence": "artificial intelligence",
+        "ml": "machine learning",
+        "machine learning": "machine learning",
+        "nlp": "natural language processing",
+        "natural language processing": "natural language processing",
+        "cv": "computer vision",
+        "computer vision": "computer vision",
+        "dl": "deep learning",
+        "deep learning": "deep learning"
+    }
+
+    return aliases.get(concept, concept)
+
+
+# =========================================================
+# DISPLAY NAME
+# =========================================================
+
+def display_concept(concept):
+    """
+    Convert normalized concepts into clean display names.
+    """
+
+    normalized = normalize_concept(concept)
+
+    display_names = {
+        "artificial intelligence": "Artificial Intelligence",
+        "machine learning": "Machine Learning",
+        "natural language processing": "Natural Language Processing",
+        "computer vision": "Computer Vision",
+        "deep learning": "Deep Learning"
+    }
+
+    return display_names.get(
+        normalized,
+        concept.strip().title()
+    )
 
 
 # =========================================================
@@ -42,6 +97,7 @@ def clean_text(text):
 def extract_keywords(text, num_keywords=30):
     """
     Extract important words and short phrases using TF-IDF.
+    This is used as a supporting NLP technique.
     """
 
     text = clean_text(text)
@@ -56,13 +112,30 @@ def extract_keywords(text, num_keywords=30):
 
     try:
 
-        vectorizer = TfidfVectorizer(
-            stop_words="english",
-            ngram_range=(1, 2),
-            max_features=100
-        )
+        # TF-IDF requires at least 2 documents to calculate
+        # meaningful document-level differences.
+        # We therefore use sentences as documents.
 
-        matrix = vectorizer.fit_transform(sentences)
+        if len(sentences) == 1:
+
+            vectorizer = TfidfVectorizer(
+                stop_words="english",
+                ngram_range=(1, 2),
+                max_features=100
+            )
+
+            matrix = vectorizer.fit_transform([text])
+
+        else:
+
+            vectorizer = TfidfVectorizer(
+                stop_words="english",
+                ngram_range=(1, 2),
+                max_features=100
+            )
+
+            matrix = vectorizer.fit_transform(sentences)
+
 
         scores = matrix.sum(axis=0).A1
 
@@ -103,19 +176,27 @@ def extract_keywords(text, num_keywords=30):
 
 def extract_concepts(text):
     """
-    Try to detect meaningful concepts from sentences.
+    Detect important concepts/topics from informative sentences.
 
     Examples:
-        Artificial Intelligence is...
-        Machine learning allows...
-        Natural language processing enables...
+
+    Artificial Intelligence is...
+        -> Artificial Intelligence
+
+    Machine learning allows...
+        -> Machine learning
+
+    Natural language processing is...
+        -> Natural language processing
     """
 
-    sentences = sent_tokenize(clean_text(text))
+    sentences = sent_tokenize(
+        clean_text(text)
+    )
 
     concepts = []
 
-    generic_words = {
+    generic_concepts = {
         "this",
         "that",
         "it",
@@ -126,116 +207,129 @@ def extract_concepts(text):
         "those"
     }
 
-    patterns = [
+    # -----------------------------------------------------
+    # Definition pattern
+    # -----------------------------------------------------
 
-        # X is/are...
-        re.compile(
-            r"^([A-Z][A-Za-z0-9-]*(?:\s+[A-Za-z0-9-]+){0,5})"
-            r"\s+(?:is|are|was|were)\b"
-        ),
+    definition_pattern = re.compile(
+        r"^([A-Z][A-Za-z0-9-]*(?:\s+[A-Za-z0-9-]+){0,5})"
+        r"\s+(?:is|are|was|were)\b"
+    )
 
-        # X allows/enables/helps...
-        re.compile(
-            r"^([A-Z][A-Za-z0-9-]*(?:\s+[A-Za-z0-9-]+){0,5})"
-            r"\s+(?:allows|enables|helps|provides|supports)\b",
-            re.IGNORECASE
-        )
-    ]
+    # -----------------------------------------------------
+    # Function pattern
+    # -----------------------------------------------------
+
+    function_pattern = re.compile(
+        r"^([A-Z][A-Za-z0-9-]*(?:\s+[A-Za-z0-9-]+){0,5})"
+        r"\s+(?:allows|enables|helps|provides|supports)\b",
+        re.IGNORECASE
+    )
 
     for sentence in sentences:
 
         sentence = sentence.strip()
 
-        for pattern in patterns:
+        concept = None
 
-            match = pattern.search(sentence)
+        # Try definition pattern first
+        match = definition_pattern.search(sentence)
+
+        if match:
+            concept = match.group(1).strip()
+
+        else:
+            # Try function pattern
+            match = function_pattern.search(sentence)
 
             if match:
-
                 concept = match.group(1).strip()
 
-                concept = re.sub(
-                    r"[.,:;!?]+$",
-                    "",
-                    concept
-                )
 
-                if concept.lower() in generic_words:
-                    continue
+        if not concept:
+            continue
 
-                if not 1 <= len(concept.split()) <= 6:
-                    continue
 
-                # Avoid duplicates
-                if concept.lower() not in [
-                    c.lower() for c in concepts
-                ]:
-                    concepts.append(concept)
+        concept = re.sub(
+            r"[.,:;!?]+$",
+            "",
+            concept
+        )
 
-                break
+        if concept.lower() in generic_concepts:
+            continue
+
+        if not 1 <= len(concept.split()) <= 6:
+            continue
+
+
+        normalized = normalize_concept(
+            concept
+        )
+
+
+        # Remove duplicate concepts
+        if normalized not in [
+            normalize_concept(x)
+            for x in concepts
+        ]:
+
+            concepts.append(concept)
+
 
     return concepts
 
 
 # =========================================================
-# BUILD CANDIDATE ANSWERS
+# GET MEANINGFUL CONCEPTS
 # =========================================================
 
-def get_candidate_answers(text):
+def get_candidate_concepts(text):
+    """
+    Return meaningful concepts for use as:
+    - correct answers
+    - MCQ distractors
+
+    This is intentionally concept-focused instead of
+    taking random words from the article.
+    """
 
     concepts = extract_concepts(text)
 
-    keywords = extract_keywords(text, 40)
+    clean_concepts = []
 
-    candidates = []
-
-    # Prefer meaningful concepts
     for concept in concepts:
 
-        if concept.lower() not in [
-            x.lower() for x in candidates
-        ]:
+        normalized = normalize_concept(
+            concept
+        )
 
-            candidates.append(concept)
-
-    # Add useful keywords
-    ignored_words = {
-        "using",
-        "used",
-        "allows",
-        "enable",
-        "enables",
-        "helps",
-        "provides",
-        "supports",
-        "make",
-        "makes",
-        "making",
-        "focuses",
-        "branch",
-        "important",
-        "part",
-        "computer",
-        "computers",
-        "technology",
-        "field"
-    }
-
-    for keyword in keywords:
-
-        if len(keyword) < 4:
+        # Ignore generic single words
+        if normalized in {
+            "computer",
+            "technology",
+            "science",
+            "data",
+            "system",
+            "method",
+            "field",
+            "branch"
+        }:
             continue
 
-        if keyword.lower() in ignored_words:
-            continue
 
-        if keyword.lower() not in [
-            x.lower() for x in candidates
+        # Avoid duplicate concepts
+        if normalized not in [
+            normalize_concept(x)
+            for x in clean_concepts
         ]:
 
-            candidates.append(keyword)
+            clean_concepts.append(
+                display_concept(concept)
+            )
 
-    return candidates
+
+    return clean_concepts
 
 
 # =========================================================
@@ -250,6 +344,7 @@ def generate_questions(text, num_questions=5):
 
     questions = []
 
+
     for sentence in sentences:
 
         sentence = sentence.strip()
@@ -259,7 +354,8 @@ def generate_questions(text, num_questions=5):
 
 
         # =================================================
-        # PATTERN 1: "X is widely used in Y"
+        # PATTERN 1
+        # "AI is widely used in healthcare..."
         # =================================================
 
         match = re.match(
@@ -270,23 +366,21 @@ def generate_questions(text, num_questions=5):
             re.IGNORECASE
         )
 
+
         if match:
 
             subject = match.group(1).strip()
-
-            fields = match.group(2).strip()
-
-            fields = fields.rstrip(".!?")
 
             if 1 <= len(subject.split()) <= 6:
 
                 questions.append({
 
                     "question":
-                        f"Where is {subject} widely used?",
+                        f"Where is {display_concept(subject)} "
+                        f"widely used?",
 
                     "answer":
-                        subject
+                        display_concept(subject)
 
                 })
 
@@ -294,7 +388,8 @@ def generate_questions(text, num_questions=5):
 
 
         # =================================================
-        # PATTERN 2: "X is a/an Y"
+        # PATTERN 2
+        # "X is a/an Y..."
         # =================================================
 
         match = re.match(
@@ -304,23 +399,20 @@ def generate_questions(text, num_questions=5):
             sentence
         )
 
+
         if match:
 
             subject = match.group(1).strip()
-
-            description = match.group(2).strip()
-
-            description = description.rstrip(".!?")
 
             if 1 <= len(subject.split()) <= 6:
 
                 questions.append({
 
                     "question":
-                        f"What is {subject}?",
+                        f"What is {display_concept(subject)}?",
 
                     "answer":
-                        subject
+                        display_concept(subject)
 
                 })
 
@@ -328,7 +420,8 @@ def generate_questions(text, num_questions=5):
 
 
         # =================================================
-        # PATTERN 3: "X is..."
+        # PATTERN 3
+        # "X is..."
         # =================================================
 
         match = re.match(
@@ -337,23 +430,20 @@ def generate_questions(text, num_questions=5):
             sentence
         )
 
+
         if match:
 
             subject = match.group(1).strip()
-
-            description = match.group(2).strip()
-
-            description = description.rstrip(".!?")
 
             if 1 <= len(subject.split()) <= 6:
 
                 questions.append({
 
                     "question":
-                        f"What is {subject}?",
+                        f"What is {display_concept(subject)}?",
 
                     "answer":
-                        subject
+                        display_concept(subject)
 
                 })
 
@@ -361,7 +451,8 @@ def generate_questions(text, num_questions=5):
 
 
         # =================================================
-        # PATTERN 4: "X allows..."
+        # PATTERN 4
+        # "X allows..."
         # =================================================
 
         match = re.match(
@@ -371,41 +462,48 @@ def generate_questions(text, num_questions=5):
             re.IGNORECASE
         )
 
+
         if match:
 
             subject = match.group(1).strip()
 
-            verb = match.group(2).strip()
-
-            action = match.group(3).strip()
-
-            action = action.rstrip(".!?")
+            verb = match.group(2).lower()
 
             if 1 <= len(subject.split()) <= 6:
 
-                if verb.lower() == "allows":
+                subject_display = display_concept(
+                    subject
+                )
 
-                    question = (
-                        f"What does {subject} allow?"
+                if verb == "allows":
+
+                    question_text = (
+                        f"What does "
+                        f"{subject_display} allow?"
                     )
 
-                elif verb.lower() == "enables":
+                elif verb == "enables":
 
-                    question = (
-                        f"What does {subject} enable?"
+                    question_text = (
+                        f"What does "
+                        f"{subject_display} enable?"
                     )
 
                 else:
 
-                    question = (
-                        f"What does {subject} help with?"
+                    question_text = (
+                        f"What does "
+                        f"{subject_display} help with?"
                     )
+
 
                 questions.append({
 
-                    "question": question,
+                    "question":
+                        question_text,
 
-                    "answer": subject
+                    "answer":
+                        subject_display
 
                 })
 
@@ -413,7 +511,8 @@ def generate_questions(text, num_questions=5):
 
 
         # =================================================
-        # PATTERN 5: "X focuses on..."
+        # PATTERN 5
+        # "X focuses on..."
         # =================================================
 
         match = re.match(
@@ -423,23 +522,21 @@ def generate_questions(text, num_questions=5):
             re.IGNORECASE
         )
 
+
         if match:
 
             subject = match.group(1).strip()
-
-            purpose = match.group(2).strip()
-
-            purpose = purpose.rstrip(".!?")
 
             if 1 <= len(subject.split()) <= 6:
 
                 questions.append({
 
                     "question":
-                        f"What is the main focus of {subject}?",
+                        f"What is the main focus of "
+                        f"{display_concept(subject)}?",
 
                     "answer":
-                        subject
+                        display_concept(subject)
 
                 })
 
@@ -447,7 +544,8 @@ def generate_questions(text, num_questions=5):
 
 
         # =================================================
-        # PATTERN 6: "X refers to..."
+        # PATTERN 6
+        # "X refers to..."
         # =================================================
 
         match = re.match(
@@ -457,23 +555,22 @@ def generate_questions(text, num_questions=5):
             re.IGNORECASE
         )
 
+
         if match:
 
             subject = match.group(1).strip()
-
-            meaning = match.group(2).strip()
-
-            meaning = meaning.rstrip(".!?")
 
             if 1 <= len(subject.split()) <= 6:
 
                 questions.append({
 
                     "question":
-                        f"What does {subject} refer to?",
+                        f"What does "
+                        f"{display_concept(subject)} "
+                        f"refer to?",
 
                     "answer":
-                        subject
+                        display_concept(subject)
 
                 })
 
@@ -481,13 +578,14 @@ def generate_questions(text, num_questions=5):
 
 
         # =================================================
-        # FALLBACK: KEYWORD-BASED QUESTION
+        # FALLBACK
         # =================================================
 
         keywords = extract_keywords(
             sentence,
-            num_keywords=10
+            10
         )
+
 
         if keywords:
 
@@ -499,6 +597,7 @@ def generate_questions(text, num_questions=5):
                 r"\b"
             )
 
+
             replaced = re.sub(
                 pattern,
                 "_____",
@@ -507,13 +606,14 @@ def generate_questions(text, num_questions=5):
                 flags=re.IGNORECASE
             )
 
+
             if replaced != sentence:
 
                 questions.append({
 
                     "question":
-                        "Complete the statement: " +
-                        replaced,
+                        "Complete the statement: "
+                        + replaced,
 
                     "answer":
                         answer
@@ -522,28 +622,35 @@ def generate_questions(text, num_questions=5):
 
 
     # =====================================================
-    # REMOVE DUPLICATE QUESTIONS
+    # REMOVE DUPLICATES
     # =====================================================
 
     unique_questions = []
 
     seen = set()
 
-    for question in questions:
+    for q in questions:
 
-        key = question["question"].lower()
+        question_key = q[
+            "question"
+        ].lower()
 
-        if key not in seen:
+        if question_key not in seen:
 
-            unique_questions.append(question)
+            unique_questions.append(q)
 
-            seen.add(key)
+            seen.add(question_key)
 
 
-    # Shuffle question order
-    random.shuffle(unique_questions)
+    # Shuffle questions
+    random.shuffle(
+        unique_questions
+    )
 
-    return unique_questions[:num_questions]
+
+    return unique_questions[
+        :num_questions
+    ]
 
 
 # =========================================================
@@ -557,105 +664,241 @@ def generate_mcqs(text, num_questions=5):
         num_questions
     )
 
-    candidates = get_candidate_answers(text)
+
+    # Get meaningful concepts
+    concepts = get_candidate_concepts(
+        text
+    )
+
 
     mcqs = []
 
 
-    for question_data in questions:
+    for q in questions:
 
-        correct_answer = question_data["answer"]
+        correct_answer = q[
+            "answer"
+        ]
 
-        possible_distractors = []
+
+        correct_normalized = normalize_concept(
+            correct_answer
+        )
 
 
-        # -------------------------------------------------
-        # Use other concepts as distractors
-        # -------------------------------------------------
+        # =================================================
+        # FIND CONCEPT-BASED DISTRACTORS
+        # =================================================
 
-        for candidate in candidates:
+        distractors = []
 
-            if candidate.lower() == correct_answer.lower():
+
+        for concept in concepts:
+
+            normalized = normalize_concept(
+                concept
+            )
+
+
+            # Don't use the correct answer
+            if normalized == correct_normalized:
                 continue
 
-            # Avoid extremely similar answers
+
+            # Don't use equivalent aliases
             if (
-                candidate.lower() in correct_answer.lower()
+                normalized in correct_normalized
                 or
-                correct_answer.lower() in candidate.lower()
+                correct_normalized in normalized
             ):
                 continue
 
-            if candidate not in possible_distractors:
 
-                possible_distractors.append(candidate)
+            # Don't duplicate
+            if concept.lower() in [
+                x.lower()
+                for x in distractors
+            ]:
+                continue
 
 
-        random.shuffle(possible_distractors)
+            distractors.append(
+                concept
+            )
 
 
-        # -------------------------------------------------
-        # Backup keywords
-        # -------------------------------------------------
+        # Shuffle concept distractors
+        random.shuffle(
+            distractors
+        )
 
-        if len(possible_distractors) < 3:
+
+        # =================================================
+        # ADD MORE CONCEPTS IF NECESSARY
+        # =================================================
+
+        if len(distractors) < 3:
+
+            extra_concepts = extract_concepts(
+                text
+            )
+
+
+            for concept in extra_concepts:
+
+                display_name = display_concept(
+                    concept
+                )
+
+                normalized = normalize_concept(
+                    display_name
+                )
+
+
+                if normalized == correct_normalized:
+                    continue
+
+
+                if (
+                    normalized in correct_normalized
+                    or
+                    correct_normalized in normalized
+                ):
+                    continue
+
+
+                if display_name.lower() in [
+                    x.lower()
+                    for x in distractors
+                ]:
+                    continue
+
+
+                distractors.append(
+                    display_name
+                )
+
+
+                if len(distractors) >= 3:
+                    break
+
+
+        # =================================================
+        # LAST RESORT: CLEAN KEYWORDS
+        # =================================================
+
+        if len(distractors) < 3:
 
             keywords = extract_keywords(
                 text,
                 50
             )
 
+
+            ignored_keywords = {
+                "using",
+                "used",
+                "allows",
+                "allow",
+                "enables",
+                "enable",
+                "helps",
+                "help",
+                "provides",
+                "supports",
+                "branch",
+                "important",
+                "part",
+                "computer",
+                "computers",
+                "technology",
+                "field",
+                "method",
+                "data",
+                "system",
+                "intelligent",
+                "machines",
+                "machine"
+            }
+
+
             for keyword in keywords:
 
-                if keyword.lower() == correct_answer.lower():
+                keyword_clean = keyword.strip()
+
+                normalized = normalize_concept(
+                    keyword_clean
+                )
+
+
+                if len(keyword_clean) < 4:
                     continue
 
-                if keyword.lower() in [
-                    x.lower()
-                    for x in possible_distractors
-                ]:
+
+                if normalized == correct_normalized:
                     continue
+
+
+                if keyword_clean.lower() in ignored_keywords:
+                    continue
+
 
                 if (
-                    keyword.lower()
-                    in correct_answer.lower()
+                    normalized in correct_normalized
                     or
-                    correct_answer.lower()
-                    in keyword.lower()
+                    correct_normalized in normalized
                 ):
                     continue
 
-                possible_distractors.append(
-                    keyword
+
+                if keyword_clean.lower() in [
+                    x.lower()
+                    for x in distractors
+                ]:
+                    continue
+
+
+                distractors.append(
+                    keyword_clean.title()
                 )
 
-                if len(possible_distractors) >= 3:
+
+                if len(distractors) >= 3:
                     break
 
 
-        # -------------------------------------------------
-        # Skip if we cannot create 4 options
-        # -------------------------------------------------
+        # =================================================
+        # NEED EXACTLY 3 WRONG OPTIONS
+        # =================================================
 
-        if len(possible_distractors) < 3:
+        if len(distractors) < 3:
+
             continue
 
 
-        distractors = possible_distractors[:3]
+        distractors = distractors[:3]
 
-        options = distractors + [
-            correct_answer
-        ]
+
+        # =================================================
+        # CREATE FOUR OPTIONS
+        # =================================================
+
+        options = (
+            distractors
+            + [correct_answer]
+        )
 
 
         # Shuffle answer position
-        random.shuffle(options)
+        random.shuffle(
+            options
+        )
 
 
         mcqs.append({
 
             "question":
-                question_data["question"],
+                q["question"],
 
             "options":
                 options,
@@ -686,12 +929,14 @@ def home():
 
 
     # =====================================================
-    # POST REQUEST
+    # POST
     # =====================================================
 
     if request.method == "POST":
 
-        action = request.form.get("action")
+        action = request.form.get(
+            "action"
+        )
 
 
         # =================================================
@@ -720,10 +965,13 @@ def home():
                 num_questions = 5
 
 
-            # Limit questions
+            # Keep questions between 1 and 10
             num_questions = max(
                 1,
-                min(num_questions, 10)
+                min(
+                    num_questions,
+                    10
+                )
             )
 
 
@@ -738,10 +986,12 @@ def home():
                 if not quiz:
 
                     message = (
-                        "Not enough suitable content "
-                        "to generate questions. "
-                        "Try using a longer article."
+                        "Not enough suitable concepts "
+                        "were found. Please enter a "
+                        "longer article containing "
+                        "multiple concepts."
                     )
+
 
             else:
 
@@ -770,21 +1020,25 @@ def home():
                 question_count = 0
 
 
-            # -------------------------------------------------
-            # Reconstruct submitted questions
-            # -------------------------------------------------
+            # ---------------------------------------------
+            # Read submitted questions
+            # ---------------------------------------------
 
-            for i in range(question_count):
+            for i in range(
+                question_count
+            ):
 
                 question = request.form.get(
                     f"question_{i}",
                     ""
                 )
 
+
                 correct_answer = request.form.get(
                     f"correct_{i}",
                     ""
                 )
+
 
                 selected_answer = request.form.get(
                     f"answer_{i}"
@@ -805,18 +1059,22 @@ def home():
                 })
 
 
-            # -------------------------------------------------
+            # ---------------------------------------------
             # Calculate score
-            # -------------------------------------------------
+            # ---------------------------------------------
 
             score = 0
 
 
-            for question in quiz:
+            for q in quiz:
 
-                selected = question["selected"]
+                selected = q[
+                    "selected"
+                ]
 
-                correct = question["answer"]
+                correct = q[
+                    "answer"
+                ]
 
 
                 if (
@@ -857,6 +1115,10 @@ def home():
 
             }
 
+
+    # =====================================================
+    # RENDER PAGE
+    # =====================================================
 
     return render_template(
 
