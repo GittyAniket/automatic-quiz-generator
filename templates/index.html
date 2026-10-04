@@ -1,16 +1,13 @@
 <!DOCTYPE html>
-
 <html lang="en">
 
 <head>
 
     <meta charset="UTF-8">
 
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>AI Quiz Generator</title>
-
 
     <style>
 
@@ -18,202 +15,141 @@
             box-sizing: border-box;
         }
 
-
         body {
-
             margin: 0;
-
             padding: 40px 20px;
-
             font-family: Arial, sans-serif;
 
-            background:
-                linear-gradient(
-                    135deg,
-                    #667eea,
-                    #764ba2
-                );
+            background: linear-gradient(
+                135deg,
+                #667eea,
+                #764ba2
+            );
 
             min-height: 100vh;
         }
 
-
         .container {
-
             max-width: 900px;
-
             margin: auto;
         }
 
-
         .card {
-
             background: white;
-
             padding: 35px;
-
             border-radius: 20px;
 
             box-shadow:
                 0 10px 35px
-                rgba(0,0,0,0.2);
+                rgba(0, 0, 0, 0.2);
         }
 
-
         h1 {
-
             text-align: center;
-
             margin-bottom: 8px;
         }
 
-
         .subtitle {
-
             text-align: center;
-
             color: #666;
-
             margin-bottom: 30px;
         }
 
-
         textarea {
-
             width: 100%;
-
             min-height: 220px;
-
             padding: 15px;
 
-            border:
-                1px solid #ccc;
-
+            border: 1px solid #ccc;
             border-radius: 10px;
 
             font-size: 15px;
-
             resize: vertical;
         }
 
-
         select {
-
             padding: 10px;
-
             margin-top: 15px;
 
             border-radius: 8px;
-
-            border:
-                1px solid #ccc;
+            border: 1px solid #ccc;
         }
 
-
         button {
-
             width: 100%;
-
             padding: 14px;
-
             margin-top: 20px;
 
             border: none;
-
             border-radius: 10px;
 
             background: #667eea;
-
             color: white;
 
             font-size: 17px;
-
             cursor: pointer;
         }
 
-
         button:hover {
-
             opacity: 0.9;
         }
 
-
         .question {
-
             margin-top: 25px;
-
             padding: 20px;
 
             background: #f7f7f7;
-
             border-radius: 12px;
         }
 
-
         .option {
-
             display: block;
 
             padding: 12px;
-
             margin: 10px 0;
 
             background: white;
 
-            border:
-                1px solid #ddd;
-
+            border: 1px solid #ddd;
             border-radius: 8px;
 
             cursor: pointer;
         }
 
-
         .option:hover {
-
             background: #f0f0ff;
         }
 
-
         .option input {
-
             margin-right: 10px;
         }
 
-
         .result {
-
             margin-top: 30px;
-
             padding: 25px;
 
             text-align: center;
 
             background: #f1f5ff;
-
             border-radius: 15px;
         }
 
-
         .score {
-
-            font-size: 35px;
-
+            font-size: 38px;
             font-weight: bold;
-
             margin: 15px 0;
         }
 
-
         .message {
-
             margin-top: 20px;
-
             padding: 15px;
 
             background: #fff3cd;
-
             border-radius: 8px;
+        }
+
+        .success {
+            color: #2e7d32;
         }
 
     </style>
@@ -223,26 +159,20 @@
 
 <body>
 
-
 <div class="container">
 
 <div class="card">
 
-
     <h1>🧠 AI Quiz Generator</h1>
 
-
     <p class="subtitle">
-
-        Generate an interactive quiz
-        from any article using NLP
-
+        Generate an interactive quiz from any article using NLP
     </p>
 
 
-    <!-- ========================= -->
-    <!-- TEXT INPUT -->
-    <!-- ========================= -->
+    <!-- ============================= -->
+    <!-- ARTICLE INPUT -->
+    <!-- ============================= -->
 
     <form method="POST">
 
@@ -252,19 +182,11 @@
             value="generate"
         >
 
-
         <textarea
-
             name="text"
-
             placeholder="Paste your article, paragraph, notes, or study material here..."
-
             required
-
         >{{ text }}</textarea>
-
-
-        <br>
 
 
         <label>
@@ -306,6 +228,10 @@
     </form>
 
 
+    <!-- ============================= -->
+    <!-- ERROR / MESSAGE -->
+    <!-- ============================= -->
+
     {% if message %}
 
         <div class="message">
@@ -317,9 +243,9 @@
     {% endif %}
 
 
-    <!-- ========================= -->
+    <!-- ============================= -->
     <!-- QUIZ -->
-    <!-- ========================= -->
+    <!-- ============================= -->
 
     {% if quiz and result is none %}
 
@@ -341,6 +267,9 @@
 
             {% for q in quiz %}
 
+                <!-- Save the outer question index -->
+                {% set q_index = loop.index0 %}
+
 
                 <div class="question">
 
@@ -358,8 +287,9 @@
                     </p>
 
 
-                    {% for option in q.options %}
+                    <!-- OPTIONS -->
 
+                    {% for option in q.options %}
 
                         <label class="option">
 
@@ -367,7 +297,7 @@
 
                                 type="radio"
 
-                                name="answer_{{ loop.parent.index0 }}"
+                                name="answer_{{ q_index }}"
 
                                 value="{{ option }}"
 
@@ -385,26 +315,29 @@
 
                         </label>
 
-
                     {% endfor %}
 
+
+                    <!-- Store question -->
 
                     <input
 
                         type="hidden"
 
-                        name="question_{{ loop.index0 }}"
+                        name="question_{{ q_index }}"
 
                         value="{{ q.question }}"
 
                     >
 
 
+                    <!-- Store correct answer -->
+
                     <input
 
                         type="hidden"
 
-                        name="correct_{{ loop.index0 }}"
+                        name="correct_{{ q_index }}"
 
                         value="{{ q.answer }}"
 
@@ -416,28 +349,31 @@
             {% endfor %}
 
 
+            <!-- SUBMIT QUIZ -->
+
             <button type="submit">
 
                 ✅ Submit Quiz
 
             </button>
 
-
         </form>
 
     {% endif %}
 
 
-    <!-- ========================= -->
+    <!-- ============================= -->
     <!-- RESULT -->
-    <!-- ========================= -->
+    <!-- ============================= -->
 
     {% if result %}
 
         <div class="result">
 
             <h2>
+
                 🎉 Quiz Completed!
+
             </h2>
 
 
@@ -463,30 +399,40 @@
 
             {% if result.percentage >= 80 %}
 
-                <p>
+                <p class="success">
+
                     🏆 Excellent work!
+
                 </p>
 
             {% elif result.percentage >= 60 %}
 
-                <p>
+                <p class="success">
+
                     👏 Great job!
+
                 </p>
 
             {% elif result.percentage >= 40 %}
 
                 <p>
+
                     👍 Good attempt!
+
                 </p>
 
             {% else %}
 
                 <p>
+
                     📚 Keep practicing!
+
                 </p>
 
             {% endif %}
 
+
+            <!-- GENERATE NEW QUIZ -->
 
             <form method="GET">
 
@@ -506,7 +452,6 @@
 </div>
 
 </div>
-
 
 </body>
 
