@@ -1,0 +1,208 @@
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>AI Quiz Generator</title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 40px 20px;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+        }
+
+        .card {
+            background: white;
+            padding: 35px;
+            border-radius: 20px;
+            box-shadow: 0 10px 35px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 220px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            font-size: 15px;
+            resize: vertical;
+        }
+
+        select {
+            padding: 10px;
+            margin-top: 15px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            margin-top: 20px;
+            border: none;
+            border-radius: 10px;
+            background: #667eea;
+            color: white;
+            font-size: 17px;
+            cursor: pointer;
+        }
+
+        .question {
+            margin-top: 25px;
+            padding: 20px;
+            background: #f7f7f7;
+            border-radius: 12px;
+        }
+
+        .option {
+            padding: 12px;
+            margin: 8px 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+
+        .message {
+            margin-top: 20px;
+            padding: 15px;
+            background: #fff3cd;
+            border-radius: 8px;
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+<div class="container">
+
+    <div class="card">
+
+        <h1>🧠 AI Quiz Generator</h1>
+
+        <p class="subtitle">
+            Generate quiz questions automatically using NLP
+        </p>
+
+
+        <form method="POST">
+
+            <textarea
+                name="text"
+                placeholder="Paste your article, paragraph, or study material here..."
+                required
+            >{{ text }}</textarea>
+
+
+            <label>
+                Number of Questions:
+            </label>
+
+            <select name="num_questions">
+
+                <option value="3">3</option>
+
+                <option value="5" selected>5</option>
+
+                <option value="7">7</option>
+
+                <option value="10">10</option>
+
+            </select>
+
+
+            <button type="submit">
+                🚀 Generate Quiz
+            </button>
+
+        </form>
+
+
+        {% if message %}
+
+        <div class="message">
+            {{ message }}
+        </div>
+
+        {% endif %}
+
+
+        {% if quiz %}
+
+        <h2 style="margin-top:35px;">
+            Generated Quiz
+        </h2>
+
+
+        {% for q in quiz %}
+
+        <div class="question">
+
+            <h3>
+                Question {{ loop.index }}
+            </h3>
+
+            <p>
+                {{ q.question }}
+            </p>
+
+
+            {% for option in q.options %}
+
+            <div class="option">
+
+                <strong>
+                    {{ "ABCD"[loop.index0] }}.
+                </strong>
+
+                {{ option }}
+
+            </div>
+
+            {% endfor %}
+
+        </div>
+
+        {% endfor %}
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+</body>
+
+</html>
