@@ -18,7 +18,7 @@ nltk.download("stopwords", quiet=True)
 
 app = Flask(__name__)
 
-app.secret_key = "quiz-generator-secret-key"
+app.secret_key = "automatic-quiz-generator"
 
 stop_words = set(stopwords.words("english"))
 
@@ -28,9 +28,10 @@ stop_words = set(stopwords.words("english"))
 # =========================================================
 
 def clean_text(text):
-    """Clean unnecessary whitespace."""
+    """Clean extra spaces and new lines."""
 
     text = re.sub(r"\s+", " ", text)
+
     return text.strip()
 
 
@@ -38,7 +39,15 @@ def clean_text(text):
 # TF-IDF KEYWORD EXTRACTION
 # =========================================================
 
-def extract_keywords(text, num_keywords=25):
+def extract_keywords(text, num_keywords=30):
+    """
+    Extract important words and short phrases using TF-IDF.
+    """
+
+    text = clean_text(text)
+
+    if not text:
+        return []
 
     sentences = sent_tokenize(text)
 
@@ -59,7 +68,7 @@ def extract_keywords(text, num_keywords=25):
 
         terms = vectorizer.get_feature_names_out()
 
-        ranked = sorted(
+        ranked_terms = sorted(
             zip(terms, scores),
             key=lambda x: x[1],
             reverse=True
@@ -67,7 +76,7 @@ def extract_keywords(text, num_keywords=25):
 
         keywords = []
 
-        for term, score in ranked:
+        for term, score in ranked_terms:
 
             term = term.strip()
 
@@ -85,7 +94,6 @@ def extract_keywords(text, num_keywords=25):
         return keywords
 
     except Exception:
-
         return []
 
 
@@ -95,49 +103,76 @@ def extract_keywords(text, num_keywords=25):
 
 def extract_concepts(text):
     """
-    Extract likely concepts/topics from the beginning
-    of informative sentences.
+    Try to detect meaningful concepts from sentences.
 
-    Example:
-    Artificial Intelligence is a branch...
-    -> Artificial Intelligence
-
-    Machine learning allows computers...
-    -> Machine learning
+    Examples:
+        Artificial Intelligence is...
+        Machine learning allows...
+        Natural language processing enables...
     """
 
-    sentences = sent_tokenize(text)
+    sentences = sent_tokenize(clean_text(text))
 
     concepts = []
 
-    # Verbs commonly appearing after a subject/concept
-    pattern = re.compile(
-        r"^([A-Z][A-Za-z0-9-]*(?:\s+[A-Za-z0-9-]+){0,5})"
-        r"\s+"
-        r"(is|are|was|were|allows|enables|helps|provides|"
-        r"supports|focuses|uses|can|refers|means|consists)\b",
-        re.IGNORECASE
-    )
+    generic_words = {
+        "this",
+        "that",
+        "it",
+        "they",
+        "he",
+        "she",
+        "these",
+        "those"
+    }
+
+    patterns = [
+
+        # X is/are...
+        re.compile(
+            r"^([A-Z][A-Za-z0-9-]*(?:\s+[A-Za-z0-9-]+){0,5})"
+            r"\s+(?:is|are|was|were)\b"
+        ),
+
+        # X allows/enables/helps...
+        re.compile(
+            r"^([A-Z][A-Za-z0-9-]*(?:\s+[A-Za-z0-9-]+){0,5})"
+            r"\s+(?:allows|enables|helps|provides|supports)\b",
+            re.IGNORECASE
+        )
+    ]
 
     for sentence in sentences:
 
         sentence = sentence.strip()
 
-        match = pattern.search(sentence)
+        for pattern in patterns:
 
-        if match:
+            match = pattern.search(sentence)
 
-            concept = match.group(1).strip()
+            if match:
 
-            # Remove trailing punctuation
-            concept = re.sub(r"[.,:;]+$", "", concept)
+                concept = match.group(1).strip()
 
-            # Avoid extremely generic concepts
-            if concept.lower() not in stop_words:
+                concept = re.sub(
+                    r"[.,:;!?]+$",
+                    "",
+                    concept
+                )
 
-                if concept not in concepts:
+                if concept.lower() in generic_words:
+                    continue
 
+                if not 1 <= len(concept.split()) <= 6:
+                    continue
+
+                # Avoid duplicates
+                if concept.lower() not in [
+                    c.lower() for c in concepts
+                ]:
                     concepts.append(concept)
+
+                break
 
     return concepts
 
@@ -150,11 +185,11 @@ def get_candidate_answers(text):
 
     concepts = extract_concepts(text)
 
-    keywords = extract_keywords(text, 30)
+    keywords = extract_keywords(text, 40)
 
     candidates = []
 
-    # Concepts get highest priority
+    # Prefer meaningful concepts
     for concept in concepts:
 
         if concept.lower() not in [
@@ -163,27 +198,35 @@ def get_candidate_answers(text):
 
             candidates.append(concept)
 
-    # Add useful keywords as backup
+    # Add useful keywords
+    ignored_words = {
+        "using",
+        "used",
+        "allows",
+        "enable",
+        "enables",
+        "helps",
+        "provides",
+        "supports",
+        "make",
+        "makes",
+        "making",
+        "focuses",
+        "branch",
+        "important",
+        "part",
+        "computer",
+        "computers",
+        "technology",
+        "field"
+    }
+
     for keyword in keywords:
 
-        # Avoid extremely short words
         if len(keyword) < 4:
             continue
 
-        # Avoid obvious generic words
-        if keyword.lower() in {
-            "using",
-            "used",
-            "allows",
-            "helps",
-            "make",
-            "makes",
-            "focuses",
-            "branch",
-            "important",
-            "part",
-            "computer"
-        }:
+        if keyword.lower() in ignored_words:
             continue
 
         if keyword.lower() not in [
@@ -215,48 +258,14 @@ def generate_questions(text, num_questions=5):
             continue
 
 
-        # -------------------------------------------------
-        # Pattern 1: X is / are ...
-        # -------------------------------------------------
+        # =================================================
+        # PATTERN 1: "X is widely used in Y"
+        # =================================================
 
         match = re.match(
             r"^([A-Z][A-Za-z0-9-]*(?:\s+[A-Za-z0-9-]+){0,5})"
-            r"\s+(is|are|was|were)\s+(.+)$",
-            sentence
-        )
-
-        if match:
-
-            subject = match.group(1).strip()
-            predicate = match.group(3).strip()
-
-            # Remove trailing punctuation
-            predicate = predicate.rstrip(".!?")
-
-            # Don't use overly long subjects
-            if 1 <= len(subject.split()) <= 6:
-
-                question = (
-                    "Which concept is " +
-                    predicate +
-                    "?"
-                )
-
-                questions.append({
-                    "question": question,
-                    "answer": subject
-                })
-
-                continue
-
-
-        # -------------------------------------------------
-        # Pattern 2: X allows / enables / helps ...
-        # -------------------------------------------------
-
-        match = re.match(
-            r"^([A-Z][A-Za-z0-9-]*(?:\s+[A-Za-z0-9-]+){0,5})"
-            r"\s+(allows|enables|helps|provides|supports)\s+(.+)$",
+            r"\s+(?:is|are|was|were)\s+"
+            r"widely used in\s+(.+)$",
             sentence,
             re.IGNORECASE
         )
@@ -264,34 +273,221 @@ def generate_questions(text, num_questions=5):
         if match:
 
             subject = match.group(1).strip()
-            verb = match.group(2).strip()
-            rest = match.group(3).strip()
 
-            rest = rest.rstrip(".!?")
+            fields = match.group(2).strip()
+
+            fields = fields.rstrip(".!?")
 
             if 1 <= len(subject.split()) <= 6:
 
-                question = (
-                    "What " +
-                    verb +
-                    " " +
-                    rest +
-                    "?"
-                )
-
                 questions.append({
-                    "question": question,
-                    "answer": subject
+
+                    "question":
+                        f"Where is {subject} widely used?",
+
+                    "answer":
+                        subject
+
                 })
 
                 continue
 
 
-        # -------------------------------------------------
-        # Pattern 3: fallback keyword question
-        # -------------------------------------------------
+        # =================================================
+        # PATTERN 2: "X is a/an Y"
+        # =================================================
 
-        keywords = extract_keywords(sentence, 10)
+        match = re.match(
+            r"^([A-Z][A-Za-z0-9-]*(?:\s+[A-Za-z0-9-]+){0,5})"
+            r"\s+(?:is|are)\s+"
+            r"(?:a|an)\s+(.+)$",
+            sentence
+        )
+
+        if match:
+
+            subject = match.group(1).strip()
+
+            description = match.group(2).strip()
+
+            description = description.rstrip(".!?")
+
+            if 1 <= len(subject.split()) <= 6:
+
+                questions.append({
+
+                    "question":
+                        f"What is {subject}?",
+
+                    "answer":
+                        subject
+
+                })
+
+                continue
+
+
+        # =================================================
+        # PATTERN 3: "X is..."
+        # =================================================
+
+        match = re.match(
+            r"^([A-Z][A-Za-z0-9-]*(?:\s+[A-Za-z0-9-]+){0,5})"
+            r"\s+(?:is|are|was|were)\s+(.+)$",
+            sentence
+        )
+
+        if match:
+
+            subject = match.group(1).strip()
+
+            description = match.group(2).strip()
+
+            description = description.rstrip(".!?")
+
+            if 1 <= len(subject.split()) <= 6:
+
+                questions.append({
+
+                    "question":
+                        f"What is {subject}?",
+
+                    "answer":
+                        subject
+
+                })
+
+                continue
+
+
+        # =================================================
+        # PATTERN 4: "X allows..."
+        # =================================================
+
+        match = re.match(
+            r"^([A-Z][A-Za-z0-9-]*(?:\s+[A-Za-z0-9-]+){0,5})"
+            r"\s+(allows|enables|helps)\s+(.+)$",
+            sentence,
+            re.IGNORECASE
+        )
+
+        if match:
+
+            subject = match.group(1).strip()
+
+            verb = match.group(2).strip()
+
+            action = match.group(3).strip()
+
+            action = action.rstrip(".!?")
+
+            if 1 <= len(subject.split()) <= 6:
+
+                if verb.lower() == "allows":
+
+                    question = (
+                        f"What does {subject} allow?"
+                    )
+
+                elif verb.lower() == "enables":
+
+                    question = (
+                        f"What does {subject} enable?"
+                    )
+
+                else:
+
+                    question = (
+                        f"What does {subject} help with?"
+                    )
+
+                questions.append({
+
+                    "question": question,
+
+                    "answer": subject
+
+                })
+
+                continue
+
+
+        # =================================================
+        # PATTERN 5: "X focuses on..."
+        # =================================================
+
+        match = re.match(
+            r"^([A-Z][A-Za-z0-9-]*(?:\s+[A-Za-z0-9-]+){0,5})"
+            r"\s+focuses on\s+(.+)$",
+            sentence,
+            re.IGNORECASE
+        )
+
+        if match:
+
+            subject = match.group(1).strip()
+
+            purpose = match.group(2).strip()
+
+            purpose = purpose.rstrip(".!?")
+
+            if 1 <= len(subject.split()) <= 6:
+
+                questions.append({
+
+                    "question":
+                        f"What is the main focus of {subject}?",
+
+                    "answer":
+                        subject
+
+                })
+
+                continue
+
+
+        # =================================================
+        # PATTERN 6: "X refers to..."
+        # =================================================
+
+        match = re.match(
+            r"^([A-Z][A-Za-z0-9-]*(?:\s+[A-Za-z0-9-]+){0,5})"
+            r"\s+refers to\s+(.+)$",
+            sentence,
+            re.IGNORECASE
+        )
+
+        if match:
+
+            subject = match.group(1).strip()
+
+            meaning = match.group(2).strip()
+
+            meaning = meaning.rstrip(".!?")
+
+            if 1 <= len(subject.split()) <= 6:
+
+                questions.append({
+
+                    "question":
+                        f"What does {subject} refer to?",
+
+                    "answer":
+                        subject
+
+                })
+
+                continue
+
+
+        # =================================================
+        # FALLBACK: KEYWORD-BASED QUESTION
+        # =================================================
+
+        keywords = extract_keywords(
+            sentence,
+            num_keywords=10
+        )
 
         if keywords:
 
@@ -314,32 +510,37 @@ def generate_questions(text, num_questions=5):
             if replaced != sentence:
 
                 questions.append({
+
                     "question":
                         "Complete the statement: " +
                         replaced,
-                    "answer": answer
+
+                    "answer":
+                        answer
+
                 })
 
 
     # =====================================================
-    # REMOVE DUPLICATES
+    # REMOVE DUPLICATE QUESTIONS
     # =====================================================
 
     unique_questions = []
 
     seen = set()
 
-    for q in questions:
+    for question in questions:
 
-        key = q["question"].lower()
+        key = question["question"].lower()
 
         if key not in seen:
 
-            unique_questions.append(q)
+            unique_questions.append(question)
+
             seen.add(key)
 
 
-    # Shuffle so the same questions aren't always first
+    # Shuffle question order
     random.shuffle(unique_questions)
 
     return unique_questions[:num_questions]
@@ -361,68 +562,80 @@ def generate_mcqs(text, num_questions=5):
     mcqs = []
 
 
-    for q in questions:
+    for question_data in questions:
 
-        correct_answer = q["answer"]
-
-
-        # -------------------------------------------------
-        # Find suitable distractors
-        # -------------------------------------------------
+        correct_answer = question_data["answer"]
 
         possible_distractors = []
 
+
+        # -------------------------------------------------
+        # Use other concepts as distractors
+        # -------------------------------------------------
+
         for candidate in candidates:
 
+            if candidate.lower() == correct_answer.lower():
+                continue
+
+            # Avoid extremely similar answers
             if (
-                candidate.lower()
-                != correct_answer.lower()
+                candidate.lower() in correct_answer.lower()
+                or
+                correct_answer.lower() in candidate.lower()
             ):
+                continue
 
-                # Avoid answers that are too similar
-                if (
-                    candidate.lower()
-                    not in correct_answer.lower()
-                    and
-                    correct_answer.lower()
-                    not in candidate.lower()
-                ):
+            if candidate not in possible_distractors:
 
-                    possible_distractors.append(candidate)
+                possible_distractors.append(candidate)
 
 
-        # Shuffle distractors
         random.shuffle(possible_distractors)
 
 
-        # Add fallback keywords if needed
+        # -------------------------------------------------
+        # Backup keywords
+        # -------------------------------------------------
+
         if len(possible_distractors) < 3:
 
             keywords = extract_keywords(
                 text,
-                40
+                50
             )
 
             for keyword in keywords:
 
+                if keyword.lower() == correct_answer.lower():
+                    continue
+
+                if keyword.lower() in [
+                    x.lower()
+                    for x in possible_distractors
+                ]:
+                    continue
+
                 if (
                     keyword.lower()
-                    != correct_answer.lower()
-                    and
-                    keyword.lower()
-                    not in [
-                        x.lower()
-                        for x in possible_distractors
-                    ]
+                    in correct_answer.lower()
+                    or
+                    correct_answer.lower()
+                    in keyword.lower()
                 ):
+                    continue
 
-                    possible_distractors.append(
-                        keyword
-                    )
+                possible_distractors.append(
+                    keyword
+                )
 
                 if len(possible_distractors) >= 3:
                     break
 
+
+        # -------------------------------------------------
+        # Skip if we cannot create 4 options
+        # -------------------------------------------------
 
         if len(possible_distractors) < 3:
             continue
@@ -430,25 +643,25 @@ def generate_mcqs(text, num_questions=5):
 
         distractors = possible_distractors[:3]
 
-
-        # -------------------------------------------------
-        # Create options
-        # -------------------------------------------------
-
         options = distractors + [
             correct_answer
         ]
 
+
+        # Shuffle answer position
         random.shuffle(options)
 
 
         mcqs.append({
 
-            "question": q["question"],
+            "question":
+                question_data["question"],
 
-            "options": options,
+            "options":
+                options,
 
-            "answer": correct_answer
+            "answer":
+                correct_answer
 
         })
 
@@ -457,7 +670,7 @@ def generate_mcqs(text, num_questions=5):
 
 
 # =========================================================
-# HOME PAGE
+# HOME ROUTE
 # =========================================================
 
 @app.route("/", methods=["GET", "POST"])
@@ -502,9 +715,16 @@ def home():
                     )
                 )
 
-            except:
+            except Exception:
 
                 num_questions = 5
+
+
+            # Limit questions
+            num_questions = max(
+                1,
+                min(num_questions, 10)
+            )
 
 
             if text.strip():
@@ -518,8 +738,9 @@ def home():
                 if not quiz:
 
                     message = (
-                        "Not enough suitable "
-                        "content to generate questions."
+                        "Not enough suitable content "
+                        "to generate questions. "
+                        "Try using a longer article."
                     )
 
             else:
@@ -544,10 +765,14 @@ def home():
                     )
                 )
 
-            except:
+            except Exception:
 
                 question_count = 0
 
+
+            # -------------------------------------------------
+            # Reconstruct submitted questions
+            # -------------------------------------------------
 
             for i in range(question_count):
 
@@ -568,30 +793,38 @@ def home():
 
                 quiz.append({
 
-                    "question": question,
+                    "question":
+                        question,
 
-                    "answer": correct_answer,
+                    "answer":
+                        correct_answer,
 
-                    "selected": selected_answer
+                    "selected":
+                        selected_answer
 
                 })
 
 
+            # -------------------------------------------------
             # Calculate score
+            # -------------------------------------------------
 
             score = 0
 
-            for q in quiz:
+
+            for question in quiz:
+
+                selected = question["selected"]
+
+                correct = question["answer"]
+
 
                 if (
-
-                    q["selected"]
-
+                    selected
                     and
-
-                    q["selected"].lower()
-                    == q["answer"].lower()
-
+                    selected.strip().lower()
+                    ==
+                    correct.strip().lower()
                 ):
 
                     score += 1
@@ -600,22 +833,27 @@ def home():
             total = len(quiz)
 
 
-            percentage = (
-                round(
+            if total > 0:
+
+                percentage = round(
                     (score / total) * 100
                 )
-                if total > 0
-                else 0
-            )
+
+            else:
+
+                percentage = 0
 
 
             result = {
 
-                "score": score,
+                "score":
+                    score,
 
-                "total": total,
+                "total":
+                    total,
 
-                "percentage": percentage
+                "percentage":
+                    percentage
 
             }
 
@@ -636,13 +874,17 @@ def home():
 
 
 # =========================================================
-# RUN APP
+# RUN APPLICATION
 # =========================================================
 
 if __name__ == "__main__":
 
     app.run(
+
         host="0.0.0.0",
+
         port=5000,
+
         debug=False
+
     )
