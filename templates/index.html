@@ -9,15 +9,20 @@
 
     <title>AI Quiz Generator</title>
 
+
     <style>
 
         * {
             box-sizing: border-box;
         }
 
+
         body {
+
             margin: 0;
+
             padding: 40px 20px;
+
             font-family: Arial, sans-serif;
 
             background: linear-gradient(
@@ -29,14 +34,21 @@
             min-height: 100vh;
         }
 
+
         .container {
+
             max-width: 900px;
+
             margin: auto;
         }
 
+
         .card {
+
             background: white;
+
             padding: 35px;
+
             border-radius: 20px;
 
             box-shadow:
@@ -44,112 +56,265 @@
                 rgba(0, 0, 0, 0.2);
         }
 
+
         h1 {
+
             text-align: center;
+
             margin-bottom: 8px;
         }
 
+
         .subtitle {
+
             text-align: center;
+
             color: #666;
+
             margin-bottom: 30px;
         }
 
+
         textarea {
+
             width: 100%;
+
             min-height: 220px;
+
             padding: 15px;
 
-            border: 1px solid #ccc;
+            border:
+                1px solid #ccc;
+
             border-radius: 10px;
 
             font-size: 15px;
+
             resize: vertical;
         }
 
+
         select {
+
             padding: 10px;
+
             margin-top: 15px;
 
             border-radius: 8px;
-            border: 1px solid #ccc;
+
+            border:
+                1px solid #ccc;
         }
 
+
         button {
+
             width: 100%;
+
             padding: 14px;
+
             margin-top: 20px;
 
             border: none;
+
             border-radius: 10px;
 
             background: #667eea;
+
             color: white;
 
             font-size: 17px;
+
             cursor: pointer;
         }
 
+
         button:hover {
+
             opacity: 0.9;
         }
 
+
         .question {
+
             margin-top: 25px;
+
             padding: 20px;
 
             background: #f7f7f7;
+
             border-radius: 12px;
         }
 
+
         .option {
+
             display: block;
 
             padding: 12px;
+
             margin: 10px 0;
 
             background: white;
 
-            border: 1px solid #ddd;
+            border:
+                1px solid #ddd;
+
             border-radius: 8px;
 
             cursor: pointer;
         }
 
+
         .option:hover {
+
             background: #f0f0ff;
         }
 
+
         .option input {
+
             margin-right: 10px;
         }
 
+
+        /* ==========================
+           RESULT SECTION
+           ========================== */
+
         .result {
+
             margin-top: 30px;
-            padding: 25px;
+
+            padding: 30px;
 
             text-align: center;
 
             background: #f1f5ff;
+
             border-radius: 15px;
         }
 
+
         .score {
-            font-size: 38px;
+
+            font-size: 42px;
+
             font-weight: bold;
+
             margin: 15px 0;
         }
 
+
+        .percentage {
+
+            font-size: 20px;
+
+            margin-bottom: 10px;
+        }
+
+
+        /* ==========================
+           ANSWER REVIEW
+           ========================== */
+
+        .review-title {
+
+            margin-top: 35px;
+
+            margin-bottom: 15px;
+
+            text-align: left;
+        }
+
+
+        .review {
+
+            margin-top: 18px;
+
+            padding: 20px;
+
+            border-radius: 12px;
+
+            text-align: left;
+
+            background: #f8f8f8;
+
+            border-left: 6px solid #999;
+        }
+
+
+        .review.correct {
+
+            border-left-color: #28a745;
+
+            background: #eaf8ee;
+        }
+
+
+        .review.incorrect {
+
+            border-left-color: #dc3545;
+
+            background: #fff0f0;
+        }
+
+
+        .review h3 {
+
+            margin-top: 0;
+
+            margin-bottom: 12px;
+        }
+
+
+        .your-answer {
+
+            margin: 8px 0;
+
+            font-size: 16px;
+        }
+
+
+        .correct-answer {
+
+            margin: 8px 0;
+
+            font-size: 16px;
+
+            font-weight: bold;
+        }
+
+
+        .status {
+
+            font-weight: bold;
+
+            margin-top: 12px;
+        }
+
+
+        .success {
+
+            color: #28a745;
+        }
+
+
+        .danger {
+
+            color: #dc3545;
+        }
+
+
         .message {
+
             margin-top: 20px;
+
             padding: 15px;
 
             background: #fff3cd;
-            border-radius: 8px;
-        }
 
-        .success {
-            color: #2e7d32;
+            border-radius: 8px;
         }
 
     </style>
@@ -163,16 +328,24 @@
 
 <div class="card">
 
+
+    <!-- ==========================================
+         HEADER
+         ========================================== -->
+
     <h1>🧠 AI Quiz Generator</h1>
 
+
     <p class="subtitle">
+
         Generate an interactive quiz from any article using NLP
+
     </p>
 
 
-    <!-- ============================= -->
-    <!-- ARTICLE INPUT -->
-    <!-- ============================= -->
+    <!-- ==========================================
+         INPUT FORM
+         ========================================== -->
 
     <form method="POST">
 
@@ -182,11 +355,15 @@
             value="generate"
         >
 
+
         <textarea
             name="text"
             placeholder="Paste your article, paragraph, notes, or study material here..."
             required
         >{{ text }}</textarea>
+
+
+        <br>
 
 
         <label>
@@ -228,9 +405,9 @@
     </form>
 
 
-    <!-- ============================= -->
-    <!-- ERROR / MESSAGE -->
-    <!-- ============================= -->
+    <!-- ==========================================
+         MESSAGE
+         ========================================== -->
 
     {% if message %}
 
@@ -243,11 +420,12 @@
     {% endif %}
 
 
-    <!-- ============================= -->
-    <!-- QUIZ -->
-    <!-- ============================= -->
+    <!-- ==========================================
+         QUIZ
+         ========================================== -->
 
     {% if quiz and result is none %}
+
 
         <form method="POST">
 
@@ -267,7 +445,6 @@
 
             {% for q in quiz %}
 
-                <!-- Save the outer question index -->
                 {% set q_index = loop.index0 %}
 
 
@@ -305,11 +482,13 @@
 
                             >
 
+
                             <strong>
 
                                 {{ "ABCD"[loop.index0] }}.
 
                             </strong>
+
 
                             {{ option }}
 
@@ -345,11 +524,10 @@
 
                 </div>
 
-
             {% endfor %}
 
 
-            <!-- SUBMIT QUIZ -->
+            <!-- SUBMIT -->
 
             <button type="submit">
 
@@ -362,9 +540,9 @@
     {% endif %}
 
 
-    <!-- ============================= -->
-    <!-- RESULT -->
-    <!-- ============================= -->
+    <!-- ==========================================
+         FINAL RESULT
+         ========================================== -->
 
     {% if result %}
 
@@ -380,21 +558,25 @@
             <div class="score">
 
                 {{ result.score }}
+
                 /
+
                 {{ result.total }}
 
             </div>
 
 
-            <p>
+            <div class="percentage">
 
                 <strong>
-                    Percentage:
+
+                    Score:
+
                 </strong>
 
                 {{ result.percentage }}%
 
-            </p>
+            </div>
 
 
             {% if result.percentage >= 80 %}
@@ -423,7 +605,7 @@
 
             {% else %}
 
-                <p>
+                <p class="danger">
 
                     📚 Keep practicing!
 
@@ -431,20 +613,114 @@
 
             {% endif %}
 
-
-            <!-- GENERATE NEW QUIZ -->
-
-            <form method="GET">
-
-                <button type="submit">
-
-                    🔄 Generate Another Quiz
-
-                </button>
-
-            </form>
-
         </div>
+
+
+        <!-- ======================================
+             ANSWER REVIEW
+             ====================================== -->
+
+        <h2 class="review-title">
+
+            📋 Answer Review
+
+        </h2>
+
+
+        {% for q in quiz %}
+
+            {% if q.selected|lower == q.answer|lower %}
+
+                <div class="review correct">
+
+            {% else %}
+
+                <div class="review incorrect">
+
+            {% endif %}
+
+
+                <h3>
+
+                    Question {{ loop.index }}
+
+                </h3>
+
+
+                <p>
+
+                    {{ q.question }}
+
+                </p>
+
+
+                <p class="your-answer">
+
+                    <strong>
+
+                        Your Answer:
+
+                    </strong>
+
+                    {% if q.selected %}
+
+                        {{ q.selected }}
+
+                    {% else %}
+
+                        Not Answered
+
+                    {% endif %}
+
+                </p>
+
+
+                <p class="correct-answer">
+
+                    ✅ Correct Answer:
+
+                    {{ q.answer }}
+
+                </p>
+
+
+                {% if q.selected|lower == q.answer|lower %}
+
+                    <p class="status success">
+
+                        ✅ Correct
+
+                    </p>
+
+                {% else %}
+
+                    <p class="status danger">
+
+                        ❌ Incorrect
+
+                    </p>
+
+                {% endif %}
+
+
+            </div>
+
+        {% endfor %}
+
+
+        <!-- ======================================
+             NEW QUIZ
+             ====================================== -->
+
+        <form method="GET">
+
+            <button type="submit">
+
+                🔄 Generate Another Quiz
+
+            </button>
+
+        </form>
 
     {% endif %}
 
